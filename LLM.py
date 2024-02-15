@@ -4,31 +4,40 @@ import tempfile
 import boto3
 from botocore.exceptions import NoCredentialsError
 from langchain_openai import ChatOpenAI
+import os
+from dotenv import load_dotenv
 from langchain.schema import SystemMessage, HumanMessage
 
-aws_access_key_id = 'AKIAS7DOCR7X3RL6UWY3'
-aws_secret_access_key = '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'
 
-s3 = boto3.client(
-    's3',
-    aws_access_key_id=aws_access_key_id,
-    aws_secret_access_key=aws_secret_access_key
-)
+load_dotenv(os.path.join(r'/Users/maverick1997/Documents/VoiceIQ/.env', '.env'))
+
+s3=boto3.client('s3')
+open_ai_key= os.getenv('open_ai_key') 
+aws_access_key_id = os.getenv('aws_access_key_id')
+aws_secret_access_key = os.getenv('aws_secret_access_key')
 
 # AssemblyAI API key setup
-aai.settings.api_key = "e87c6067b9d345c08166ce56e842f0b6"  
+aai.settings.api_key = os.getenv('AssemblyAI_API')  
 llm = ChatOpenAI(api_key="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")
 
 # AWS S3 setup
-s3 = boto3.client('s3')
+# s3 = boto3.client('s3')
 BUCKET_NAME = 'audiofilellm'  
+# path = '/Users/maverick1997/Downloads/01-ted-talk.mp3'
 
-def upload_file_to_s3(file, file_name):
+# file='01-ted-talk.mp3'
+# s3_bucket_path = "audiofile/"+file
+
+def upload_file_to_s3(file,file_name):
     try:
-        s3.upload_fileobj(file, BUCKET_NAME, file_name)
-        return f"s3://{BUCKET_NAME}/{file_name}"
+        s3_bucket_path = "audiofile/"+file
+        response= s3.upload_file(file_name,BUCKET_NAME,s3_bucket_path)
+        # print("inside try")
+        # s3.meta.client.upload_file(Filename='/Users/maverick1997/Downloads/01-ted-talk.mp3', Bucket='audiofilellm',Key='01-ted-talk.mp3')
+        # response =  f"s3://{BUCKET_NAME}/audiofile/{file_name}"
+        # print("response:", response)
     except NoCredentialsError:
-        st.error("Credentials not available")
+        st.error("Upload failed: Credentials not available")
         return None
 
 def get_file_from_s3(file_name):
@@ -37,7 +46,7 @@ def get_file_from_s3(file_name):
             s3.download_fileobj(BUCKET_NAME, file_name, temp_file)
             return temp_file.name
     except NoCredentialsError:
-        st.error("Credentials not available")
+        st.error("Fetch failed: Credentials not available")
         return None
 
 def transcribe_audio(file_path):
@@ -79,7 +88,8 @@ def main():
     audio_file = st.file_uploader("Upload Audio", type=['wav', 'mp3', 'mp4', 'ogg', 'm4a'])
     if audio_file is not None:
         file_name = audio_file.name
-        s3_path = upload_file_to_s3(audio_file, file_name)
+        filename = '/Users/maverick1997/Downloads/'+file_name
+        s3_path = upload_file_to_s3(file_name, filename)
         if s3_path:
             st.success(f"File uploaded to {s3_path}")
             st.session_state.s3_file_name = file_name  # Save the file name in session state
