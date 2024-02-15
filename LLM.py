@@ -1,18 +1,16 @@
-
 import streamlit as st
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
-import torch
-import requests
-import snowflake.connector
 import os
 from dotenv import load_dotenv
-load_dotenv(os.path.join('C:/Users/19452/Desktop/LLM','.env'))
-                         
+import requests
+import snowflake.connector
+from langchain.llms import OpenAI  # Import LangChain
 
-# Load pre-trained GPT-2 model and tokenizer
-model_name = 'gpt2-medium'
-model = GPT2LMHeadModel.from_pretrained(model_name)
-tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+# Load environment variables
+load_dotenv(os.path.join('C:/Users/19452/Desktop/LLM', '.env'))
+
+# Initialize LangChain with GPT-3
+model_kwargs = {'api_key': os.getenv('OPENAI_API_KEY')}
+llm = OpenAI(model_kwargs=model_kwargs)
 
 # Snowflake connection details
 snowflake_account = os.getenv('snowflake_account')
@@ -51,19 +49,20 @@ def transcribe_audio(uploaded_file, api_key):
     response = requests.post(url, headers=headers, files=files)
 
     if response.status_code == 200:
-        return response.json().get('text', '')
+        transcription = response.json().get('text', '')
+        if transcription:
+            return transcription
+        else:
+            st.error("Transcription service returned an empty response.")
+            return None
     else:
         st.error("Failed to transcribe audio")
         st.write(f"Error: {response.text}")
         return None
 
-def generate_answer(transcript, question):
-    input_text = transcript + " " + question
-    input_ids = tokenizer.encode(input_text, return_tensors='pt', truncation=True, max_length=1024)
-    
-    output = model.generate(input_ids, max_length=1024, num_return_sequences=1, no_repeat_ngram_size=2)
-    answer = tokenizer.decode(output[0], skip_special_tokens=True)
-    return answer
+def generate_answer_with_langchain(transcript, question):
+    response = llm.complete(prompt=f"{transcript}\n\nQuestion: {question}\nAnswer:", max_tokens=1024)
+    return response.get('choices')[0].get('text').strip()
 
 def main():
     st.title("Audio File Transcription and Chatbot Interaction")
@@ -73,20 +72,22 @@ def main():
 
     if uploaded_file is not None:
         transcript = transcribe_audio(uploaded_file, os.getenv('APIKEY'))
-        st.text_area("Transcript", value=transcript, height=150)
+
+        if transcript:
+            st.text_area("Transcript", value=transcript, height=150)
+        else:
+            st.write("No transcript received or it's empty.")  # Debugging
 
         if st.button('Save Transcript'):
             save_transcript_to_snowflake(transcript)
             st.success('Transcript saved successfully to Snowflake.')
 
-    st.subheader("Chat with the GPT-2 bot based on the transcript")
+    st.subheader("Chat with the AI based on the transcript")
     user_input = st.text_input("Your question:")
 
     if user_input and transcript:
-        answer = generate_answer(transcript, user_input)
-        st.text_area("GPT-2 Response", value=answer, height=100)
+        answer = generate_answer_with_langchain(transcript, user_input)
+        st.text_area("AI Response", value=answer, height=100)
 
 if __name__ == "__main__":
     main()
-
-
