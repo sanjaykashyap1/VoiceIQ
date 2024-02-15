@@ -1,93 +1,223 @@
 import streamlit as st
-import os
-from dotenv import load_dotenv
-import requests
-import snowflake.connector
-from langchain.llms import OpenAI  # Import LangChain
+import assemblyai as aai
+import tempfile
+import boto3
+from botocore.exceptions import NoCredentialsError
+from langchain_openai import ChatOpenAI
+from langchain.schema import SystemMessage, HumanMessage
 
-# Load environment variables
-load_dotenv(os.path.join('C:/Users/19452/Desktop/LLM', '.env'))
+aws_access_key_id = 'AKIAS7DOCR7X3RL6UWY3'
+aws_secret_access_key = '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'
 
-# Initialize LangChain with GPT-3
-model_kwargs = {'api_key': os.getenv('OPENAI_API_KEY')}
-llm = OpenAI(model_kwargs=model_kwargs)
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=aws_access_key_id,
+    aws_secret_access_key=aws_secret_access_key
+)
 
-# Snowflake connection details
-snowflake_account = os.getenv('snowflake_account')
-snowflake_user = os.getenv('snowflake_user')
-snowflake_password = os.getenv('snowflake_password')
-snowflake_warehouse = 'compute_wh'
-snowflake_database = 'transcripts'
-snowflake_schema = 'public'
-snowflake_table = 'transcripts'
+# AssemblyAI API key setup
+aai.settings.api_key = "e87c6067b9d345c08166ce56e842f0b6"  
+llm = ChatOpenAI(api_key="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")
 
-def save_transcript_to_snowflake(transcript):
-    conn = snowflake.connector.connect(
-        user=snowflake_user,
-        password=snowflake_password,
-        account=snowflake_account,
-        warehouse=snowflake_warehouse,
-        database=snowflake_database,
-        schema=snowflake_schema
-    )
-    cursor = conn.cursor()
+# AWS S3 setup
+s3 = boto3.client('s3')
+BUCKET_NAME = 'audiofilellm'  
+
+def upload_file_to_s3(file, file_name):
     try:
-        cursor.execute(
-            f"INSERT INTO {snowflake_table} (transcript) VALUES (%s)",
-            (transcript,)
-        )
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-
-def transcribe_audio(uploaded_file, api_key):
-    url = "https://transcribe.whisperapi.com"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    files = {"file": uploaded_file.getvalue()}
-
-    response = requests.post(url, headers=headers, files=files)
-
-    if response.status_code == 200:
-        transcription = response.json().get('text', '')
-        if transcription:
-            return transcription
-        else:
-            st.error("Transcription service returned an empty response.")
-            return None
-    else:
-        st.error("Failed to transcribe audio")
-        st.write(f"Error: {response.text}")
+        s3.upload_fileobj(file, BUCKET_NAME, file_name)
+        return f"s3://{BUCKET_NAME}/{file_name}"
+    except NoCredentialsError:
+        st.error("Credentials not available")
         return None
 
-def generate_answer_with_langchain(transcript, question):
-    response = llm.complete(prompt=f"{transcript}\n\nQuestion: {question}\nAnswer:", max_tokens=1024)
-    return response.get('choices')[0].get('text').strip()
+def get_file_from_s3(file_name):
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
+            s3.download_fileobj(BUCKET_NAME, file_name, temp_file)
+            return temp_file.name
+    except NoCredentialsError:
+        st.error("Credentials not available")
+        return None
 
+def transcribe_audio(file_path):
+    # Create a new Transcriber
+    transcriber = aai.Transcriber()
+
+    # Transcribe using AssemblyAI
+    transcript = transcriber.transcribe(file_path)
+
+    # Check for errors
+    if transcript.error:
+        st.error(f"Transcription error: {transcript.error}")
+        return ""
+
+    return transcript.text
+
+def get_chatbot_response(transcript, user_query, chunk_size=800):
+    # Split the transcript into chunks
+    transcript_chunks = [transcript[i:i+chunk_size] for i in range(0, len(transcript), chunk_size)]
+    
+    # Use only the last N chunks for context
+    relevant_context = "\n".join(transcript_chunks[-10:])  # Adjust the number of chunks as needed
+
+    messages = [
+        SystemMessage(content=f'You will answer questions based on the following transcript - "{relevant_context}"'),
+        HumanMessage(content=user_query)
+    ]
+    response = llm.invoke(messages)
+    return response.content
+
+# Streamlit interface
 def main():
-    st.title("Audio File Transcription and Chatbot Interaction")
+    st.title("Audio Transcription and Langchain Chatbot")
 
-    uploaded_file = st.file_uploader("Upload an audio file", type=['wav', 'mp3', 'ogg'])
-    transcript = ""
+    if 'transcript' not in st.session_state:
+        st.session_state.transcript = ""
 
-    if uploaded_file is not None:
-        transcript = transcribe_audio(uploaded_file, os.getenv('APIKEY'))
+    # Audio upload and save to S3
+    audio_file = st.file_uploader("Upload Audio", type=['wav', 'mp3', 'mp4', 'ogg', 'm4a'])
+    if audio_file is not None:
+        file_name = audio_file.name
+        s3_path = upload_file_to_s3(audio_file, file_name)
+        if s3_path:
+            st.success(f"File uploaded to {s3_path}")
+            st.session_state.s3_file_name = file_name  # Save the file name in session state
 
-        if transcript:
-            st.text_area("Transcript", value=transcript, height=150)
+    # Option to transcribe from S3
+    if st.button("Transcribe from S3"):
+        if 's3_file_name' in st.session_state and st.session_state.s3_file_name:
+            local_file_path = get_file_from_s3(st.session_state.s3_file_name)
+            if local_file_path:
+                st.session_state.transcript = transcribe_audio(local_file_path)
         else:
-            st.write("No transcript received or it's empty.")  # Debugging
+            st.error("No file selected")
 
-        if st.button('Save Transcript'):
-            save_transcript_to_snowflake(transcript)
-            st.success('Transcript saved successfully to Snowflake.')
+    if st.session_state.transcript:
+        st.write("Transcript:")
+        st.text_area("Transcript Output", st.session_state.transcript, height=250)
 
-    st.subheader("Chat with the AI based on the transcript")
-    user_input = st.text_input("Your question:")
+    # Chatbot interaction
+    user_query = st.text_input("Ask a question based on the transcript:")
+    if user_query:
+        with st.spinner('Generating response...'):
+            response = get_chatbot_response(st.session_state.transcript, user_query)
+            st.write("Chatbot Response:")
+            st.write(response)
 
-    if user_input and transcript:
-        answer = generate_answer_with_langchain(transcript, user_input)
-        st.text_area("AI Response", value=answer, height=100)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+
+
+
+
+
+
+
+
+# import streamlit as st
+# import assemblyai as aai
+# import tempfile
+# from langchain_openai import ChatOpenAI
+# from langchain.schema import SystemMessage, HumanMessage
+
+# # AssemblyAI API key setup
+# aai.settings.api_key = "e87c6067b9d345c08166ce56e842f0b6"  
+# llm = ChatOpenAI(api_key = "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")
+
+
+# def transcribe_audio(uploaded_file):
+#     # Save the uploaded file to a temporary file
+#     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
+#         temp_file.write(uploaded_file.getvalue())
+#         temp_file_path = temp_file.name
+
+#     # Create a new Transcriber
+#     transcriber = aai.Transcriber()
+
+#     # Transcribe using AssemblyAI
+#     transcript = transcriber.transcribe(temp_file_path)
+
+#     # Check for errors
+#     if transcript.error:
+#         st.error(f"Transcription error: {transcript.error}")
+#         return ""
+
+#     return transcript.text
+
+# def get_chatbot_response(transcript, user_query, chunk_size=800):
+#     # Split the transcript into chunks
+#     transcript_chunks = [transcript[i:i+chunk_size] for i in range(0, len(transcript), chunk_size)]
+    
+#     # Use only the last N chunks for context
+#     relevant_context = "\n".join(transcript_chunks[-10:])  # Adjust the number of chunks as needed
+
+#     messages = [
+#         SystemMessage(content=f'You will answer questions based on the following transcript - "{relevant_context}"'),
+#         HumanMessage(content=user_query)
+#     ]
+#     response = llm.invoke(messages)
+#     return response.content
+
+# # def get_chatbot_response(transcript, user_query):
+# #     messages = [
+# #         SystemMessage(content=f'You analyze this transcript and answer any questions based on or about it - "{transcript}"'),
+# #         HumanMessage(content=user_query)
+# #     ]
+# #     response = llm.invoke(messages)
+# #     return response.content
+
+# # Streamlit interface
+# def main():
+#     st.title("Audio Transcription and Langchain Chatbot")
+
+#     if 'transcript' not in st.session_state:
+#         st.session_state.transcript = ""
+
+#     # Audio upload
+#     audio_file = st.file_uploader("Upload Audio", type=['wav', 'mp3', 'mp4', 'ogg', 'm4a'])
+
+#     if audio_file is not None and not st.session_state.transcript:
+#         with st.spinner('Transcribing...'):
+#             st.session_state.transcript = transcribe_audio(audio_file)
+    
+#     if st.session_state.transcript:
+#         st.write("Transcript:")
+#         st.text_area("Transcript Output", st.session_state.transcript, height=250)
+
+#     # Chatbot interaction
+#     user_query = st.text_input("Ask a question based on the transcript:")
+#     if user_query:
+#         with st.spinner('Generating response...'):
+#             response = get_chatbot_response(st.session_state.transcript, user_query)
+#             st.write("Chatbot Response:")
+#             st.write(response)
+
+# if __name__ == '__main__':
+#     main()
+
+
+
+
+# def main():
+#     st.title("Audio Transcription and Langchain Chatbot")
+
+#     # Audio upload
+#     audio_file = st.file_uploader("Upload Audio", type=['wav', 'mp3', 'mp4', 'ogg', 'm4a'])
+
+#     if audio_file is not None:
+#         with st.spinner('Transcribing...'):
+#             transcript = transcribe_audio(audio_file)
+#             st.write("Transcript:")
+#             st.text_area("Transcript Output", transcript, height=250)
+
+#         # Chatbot interaction
+#         user_query = st.text_input("Ask a question based on the transcript:")
+#         if user_query:
+#             with st.spinner('Generating response...'):
+#                 response = get_chatbot_response(transcript, user_query)
+#                 st.write("Chatbot Response:")
+#                 st.write(response)
+
+# if __name__ == '__main__':
+#     main()
