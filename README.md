@@ -70,6 +70,19 @@ aws_secret_access_key = your_secret_access_key
   <li>View the transcription and sentiment analysis results in the DocumentDetail.</li>
 </ol>
 
+<h3>Backend</h3>
+<p>The backend folder runs on AWS Lambda and integrates with the following services:</p>
+
+<h4>DynamoDB</h4>
+<p>DynamoDB is used to store and retrieve data for the application, such as transcriptions and sentiment analysis results.</p>
+
+<h4>Amazon SQS</h4>
+<p>Amazon SQS is used for asynchronous communication between the frontend and backend components, ensuring reliable message delivery and processing.</p>
+
+<p>The backend folder should be deployed to AWS Lambda and configured with the necessary IAM roles and policies to access DynamoDB and Amazon SQS.</p>
+
+
+
 <h2>Contributing</h2>
 <p>We welcome contributions! To contribute to VoiceIQ, follow these steps:</p>
 <ol>
