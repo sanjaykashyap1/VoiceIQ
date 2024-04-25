@@ -17,30 +17,31 @@
   <li>Performance Comparison: Compare the performance of different models from AWS Bedrock.</li>
 </ul>
 
-## Structural Diagram
 
 <h2>Structural Diagram</h2>
 <p>The following diagram illustrates the architecture of VoiceIQ:</p>
 <img src="Structure_diagram.png" alt="Structural Diagram">
 
-<!-- ## Screenshots
+Screenshots
 
 <h2>Screenshots</h2>
 <p>Here are some screenshots of the VoiceIQ frontend:</p>
 
 <h3>Screenshot 1</h3>
-<img src="path/to/screenshot1.png" alt="Screenshot 1">
+<img src="Preview1.jpeg" alt="Screenshot 1">
 
 <h3>Screenshot 2</h3>
-<img src="path/to/screenshot2.png" alt="Screenshot 2">
- -->
+<img src="Preview2.jpeg" alt="Screenshot 2">
+
+<h3>Screenshot 3</h3>
+<img src="Preview3.jpeg" alt="Screenshot 2">
 
 <h2>Setup</h2>
 <ol>
   <li>Clone the repository:</li>
 </ol>
 
-<pre><code>git clone https://github.com/your-username/VoiceIQ.git</code></pre>
+<pre><code>git clone https://github.com/sanjaykashyap1/VoiceIQ.git </code></pre>
 
 <ol start="2">
   <li>Install dependencies:</li>
