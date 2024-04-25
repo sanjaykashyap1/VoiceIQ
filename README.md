@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceIQ</title>
 </head>
 <body>
 
@@ -17,6 +16,24 @@
   <li>Sentiment Analysis: Analyze the sentiment of transcribed text.</li>
   <li>Performance Comparison: Compare the performance of different models from AWS Bedrock.</li>
 </ul>
+
+## Structural Diagram
+
+<h2>Structural Diagram</h2>
+<p>The following diagram illustrates the architecture of VoiceIQ:</p>
+<img src="Structure_diagram.png" alt="Structural Diagram">
+
+<!-- ## Screenshots
+
+<h2>Screenshots</h2>
+<p>Here are some screenshots of the VoiceIQ frontend:</p>
+
+<h3>Screenshot 1</h3>
+<img src="path/to/screenshot1.png" alt="Screenshot 1">
+
+<h3>Screenshot 2</h3>
+<img src="path/to/screenshot2.png" alt="Screenshot 2">
+ -->
 
 <h2>Setup</h2>
 <ol>
@@ -63,8 +80,6 @@ aws_secret_access_key = your_secret_access_key
   <li>Create a new Pull Request.</li>
 </ol>
 
-<h2>License</h2>
-<p>This project is licensed under the MIT License - see the <a href="LICENSE">LICENSE</a> file for details.</p>
 
 </body>
 </html>
