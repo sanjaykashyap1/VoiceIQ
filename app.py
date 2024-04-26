@@ -106,8 +106,12 @@ def handle_ready_to_chat(document_id, conversation_id):
             st.success(f"New conversation created with ID: {new_conversation_id}")
             # Update the conversation_id in the session state
             st.session_state.selected_document['conversation_id'] = new_conversation_id
+            # Prompt the user to navigate to the chat section
+            st.info("Navigate to the chat section to start the conversation.")
         else:
             st.error(f"Error creating new conversation: {add_conversation_response['body']}")
+
+
 
 # Adjust the function to take a single dictionary argument
 def display_document_details(filename, filesize, pages, document_id, conversation_id):
@@ -325,9 +329,19 @@ def main():
   
     if choice == "Chat":
         if 'selected_document' in st.session_state:
+            display_document_details(**st.session_state.selected_document)
             document_id = st.session_state.selected_document['document_id']
             conversation_id = st.session_state.selected_document['conversation_id']
             human_input = st.chat_input("Your message")
+
+            if "messages" not in st.session_state:
+                st.session_state.messages = []
+
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            
             if human_input:
                 user_message = {
                     "role": "user",
@@ -350,7 +364,6 @@ def main():
                     with st.chat_message("assistant"):
                         st.markdown(assistant_response["content"])
                     st.session_state.messages.append(assistant_response)
-
 
 if __name__ == "__main__":
     main()
